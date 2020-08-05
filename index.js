@@ -1,15 +1,19 @@
-const puppeteer = require('puppeteer');
 require('dotenv').config();
 require('chromedriver');
 const { Builder, By, Key, until, Button } = require('selenium-webdriver');
-
+const { openDb } = require('./utils/db');
 const fs = require('fs');
 const util = require('util');
 const readFile = util.promisify(fs.readFile);
+const { Webhook, MessageBuilder } = require('discord-webhook-node');
+const hook = new Webhook(process.env.DISCORD_WEBHOOK);
+const IMAGE_URL =
+	'https://www.radarcupao.pt/assets/persist/cache/160x160_logo/persist/images/logos/worten.pt.png';
+hook.setUsername('Worten Monitor');
+hook.setAvatar(IMAGE_URL);
 
 async function loadItemNamesforSearch() {
 	let filename = 'items.txt';
-	let items;
 	await readFile(filename, 'utf8', async function (err, data) {
 		if (err) throw err;
 		startTracking(data.split('\r\n'));
@@ -39,18 +43,81 @@ async function setup(itemName) {
 async function startTracking(itemNames) {
 	console.log(itemNames);
 	await itemNames.forEach(async (itemName) => {
-		let driver = await setup(encodeURIComponent(itemName));
+		const driver = await setup(encodeURIComponent(itemName));
 		let products = await driver.findElements(By.className('w-product__url'));
+		await driver.wait(
+			until.elementLocated(By.xpath('//img[@class="lazy loaded"]'))
+		);
+		let db = await openDb();
 		products.forEach(async (product) => {
-			let productName = await product
-				.findElement(By.className('w-product__title'))
-				.getText();
-			let price = await product
-				.findElement(By.className('w-currentPrice iss-current-price'))
-				.getText();
+			try {
+				let productName = await product
+					.findElement(By.className('w-product__title'))
+					.getText();
+				let price = await product
+					.findElement(By.className('w-currentPrice iss-current-price'))
+					.getText();
+				let link = await product.getAttribute('href');
+				let image = await product
+					.findElement(By.tagName('img'))
+					.getAttribute('src');
+				const row = await db.get('SELECT * FROM products WHERE name = :name', {
+					':name': productName,
+				});
 
-			console.log('Name: ' + productName + ' Price: ' + price);
+				price = price.replace(/€/, '');
+				price = price.replace(/,/, '.');
+				price = price.trim();
+				let embed = new MessageBuilder()
+					.setTitle('NEW PRICE')
+					.setURL(link)
+					.addField('Price', price, true)
+					.setColor('#e41a15')
+					.setThumbnail(image)
+					.setDescription(productName)
+					.setTimestamp();
+
+				hook.send(embed);
+				if (row == undefined) {
+					let res = await db.run(
+						'INSERT INTO products (name,price) VALUES (?,?)',
+						productName,
+						price
+					);
+					embed = new MessageBuilder()
+						.setTitle('NEW PRICE')
+						.setURL(link)
+						.addField('Price', price, true)
+						.setColor('#e41a15')
+						.setThumbnail(image)
+						.setDescription(productName)
+						.setTimestamp();
+
+					hook.send(embed);
+				} else {
+					if (price != row.price) {
+						res = db.run(
+							'UPDATE products set price = ? WHERE id=?',
+							price,
+							row.id
+						);
+						embed = new MessageBuilder()
+							.setTitle('NEW PRICE')
+							.setURL(link)
+							.addField('Price', price, true)
+							.setColor('#e41a15')
+							.setThumbnail(image)
+							.setDescription(productName)
+							.setTimestamp();
+
+						hook.send(embed);
+					}
+				}
+			} catch (error) {
+				console.log(error);
+			}
 		});
+		driver.close();
 	});
 }
 loadItemNamesforSearch();
