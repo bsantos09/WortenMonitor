@@ -10,6 +10,8 @@ const hook = new Webhook(process.env.DISCORD_WEBHOOK);
 const IMAGE_URL =
 	'https://www.radarcupao.pt/assets/persist/cache/160x160_logo/persist/images/logos/worten.pt.png';
 hook.setUsername('Worten Monitor');
+const chrome = require('selenium-webdriver/chrome');
+
 hook.setAvatar(IMAGE_URL);
 
 async function loadItemNamesforSearch() {
@@ -20,7 +22,10 @@ async function loadItemNamesforSearch() {
 	});
 }
 async function setup(itemName) {
-	let driver = await new Builder().forBrowser('chrome').build();
+	let driver = await new Builder()
+		.forBrowser('chrome')
+		.setChromeOptions(new chrome.Options().headless())
+		.build();
 	let url =
 		process.env.TARGET_WEBSITE +
 		'search?query=' +
@@ -40,12 +45,12 @@ async function setup(itemName) {
 }
 
 async function startTracking(itemNames) {
-	itemNames.forEach(async (itemName) => {
+	let procedItemNames = await itemNames.map(async (itemName) => {
 		const driver = await setup(encodeURIComponent(itemName));
 
 		let products = await driver.findElements(By.className('w-product__url'));
 		let db = await openDb();
-		products.forEach(async (product) => {
+		let processedProducts = await products.map(async (product) => {
 			try {
 				let productName = await product
 					.findElement(By.className('w-product__title'))
@@ -64,16 +69,6 @@ async function startTracking(itemNames) {
 				price = price.replace(/€/, '');
 				price = price.replace(/,/, '.');
 				price = price.trim();
-				let embed = await new MessageBuilder()
-					.setTitle('NEW PRICE')
-					.setURL(link)
-					.addField('Price', price + '€', true)
-					.setColor('#e41a15')
-					.setThumbnail(image)
-					.setDescription(productName)
-					.setTimestamp();
-
-				console.log(await hook.send(embed));
 				if (row == undefined) {
 					let res = await db.run(
 						'INSERT INTO products (name,price) VALUES (?,?)',
@@ -89,7 +84,7 @@ async function startTracking(itemNames) {
 						.setDescription(productName)
 						.setTimestamp();
 
-					console.log(await hook.send(embed));
+					await hook.send(embed);
 				} else {
 					if (price != row.price) {
 						res = db.run(
@@ -97,27 +92,28 @@ async function startTracking(itemNames) {
 							price,
 							row.id
 						);
+						let priceDifference = price - row.price;
 						let embed = await new MessageBuilder()
 							.setTitle('NEW PRICE')
 							.setURL(link)
 							.addField('Price', price + '€', true)
+							.addField('Difference', priceDifference + '€', true)
 							.setColor('#e41a15')
 							.setThumbnail(image)
 							.setDescription(productName)
 							.setTimestamp();
 
-						console.log(await hook.send(embed));
+						await hook.send(embed);
 					}
 				}
 			} catch (error) {
 				console.log(error);
 			}
-			//await driver.close();
 		});
 
-		//await Promise.all(processedProducts);
-		//await driver.close();
+		await Promise.all(processedProducts);
+		await driver.close();
 	});
-	///await Promise.all(processedItems);
+	await Promise.all(procedItemNames);
 }
 loadItemNamesforSearch();
