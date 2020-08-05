@@ -16,19 +16,18 @@ async function loadItemNamesforSearch() {
 	let filename = 'items.txt';
 	await readFile(filename, 'utf8', async function (err, data) {
 		if (err) throw err;
-		startTracking(data.split('\r\n'));
-		console.log('DATA');
+		await startTracking(await data.split('\r\n'));
 	});
 }
 async function setup(itemName) {
 	let driver = await new Builder().forBrowser('chrome').build();
-	console.log(process.env.TARGET_WEBSITE);
 	let url =
 		process.env.TARGET_WEBSITE +
 		'search?query=' +
 		itemName +
 		'&sortBy=relevance&hitsPerPage=48&page=1&facetFilters=seller_id%3A689dda97-efa4-4c6d-96bc-6f4bbfda8394&latestFacet=seller_id%3A689dda97-efa4-4c6d-96bc-6f4bbfda8394';
 	await driver.get(url);
+	await driver.wait(until.elementLocated(By.id('products-list-block')));
 	await driver.wait(
 		until.elementLocated(
 			By.xpath('/html/body/div[1]/section/div[2]/div[2]/button')
@@ -41,13 +40,10 @@ async function setup(itemName) {
 }
 
 async function startTracking(itemNames) {
-	console.log(itemNames);
-	await itemNames.forEach(async (itemName) => {
+	itemNames.forEach(async (itemName) => {
 		const driver = await setup(encodeURIComponent(itemName));
+
 		let products = await driver.findElements(By.className('w-product__url'));
-		await driver.wait(
-			until.elementLocated(By.xpath('//img[@class="lazy loaded"]'))
-		);
 		let db = await openDb();
 		products.forEach(async (product) => {
 			try {
@@ -59,41 +55,41 @@ async function startTracking(itemNames) {
 					.getText();
 				let link = await product.getAttribute('href');
 				let image = await product
-					.findElement(By.tagName('img'))
+					.findElement(By.css('figure > img'))
 					.getAttribute('src');
 				const row = await db.get('SELECT * FROM products WHERE name = :name', {
 					':name': productName,
 				});
-
+				console.log(productName + ' Price: ' + price);
 				price = price.replace(/€/, '');
 				price = price.replace(/,/, '.');
 				price = price.trim();
-				let embed = new MessageBuilder()
+				let embed = await new MessageBuilder()
 					.setTitle('NEW PRICE')
 					.setURL(link)
-					.addField('Price', price, true)
+					.addField('Price', price + '€', true)
 					.setColor('#e41a15')
 					.setThumbnail(image)
 					.setDescription(productName)
 					.setTimestamp();
 
-				hook.send(embed);
+				console.log(await hook.send(embed));
 				if (row == undefined) {
 					let res = await db.run(
 						'INSERT INTO products (name,price) VALUES (?,?)',
 						productName,
 						price
 					);
-					embed = new MessageBuilder()
+					let embed = await new MessageBuilder()
 						.setTitle('NEW PRICE')
 						.setURL(link)
-						.addField('Price', price, true)
+						.addField('Price', price + '€', true)
 						.setColor('#e41a15')
 						.setThumbnail(image)
 						.setDescription(productName)
 						.setTimestamp();
 
-					hook.send(embed);
+					console.log(await hook.send(embed));
 				} else {
 					if (price != row.price) {
 						res = db.run(
@@ -101,23 +97,27 @@ async function startTracking(itemNames) {
 							price,
 							row.id
 						);
-						embed = new MessageBuilder()
+						let embed = await new MessageBuilder()
 							.setTitle('NEW PRICE')
 							.setURL(link)
-							.addField('Price', price, true)
+							.addField('Price', price + '€', true)
 							.setColor('#e41a15')
 							.setThumbnail(image)
 							.setDescription(productName)
 							.setTimestamp();
 
-						hook.send(embed);
+						console.log(await hook.send(embed));
 					}
 				}
 			} catch (error) {
 				console.log(error);
 			}
+			//await driver.close();
 		});
-		driver.close();
+
+		//await Promise.all(processedProducts);
+		//await driver.close();
 	});
+	///await Promise.all(processedItems);
 }
 loadItemNamesforSearch();
