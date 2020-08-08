@@ -11,14 +11,17 @@ const IMAGE_URL =
 	'https://www.radarcupao.pt/assets/persist/cache/160x160_logo/persist/images/logos/worten.pt.png';
 hook.setUsername('Worten Monitor');
 const chrome = require('selenium-webdriver/chrome');
+var cron = require('node-cron');
 
 hook.setAvatar(IMAGE_URL);
 
 async function loadItemNamesforSearch() {
+	console.log('Checking!');
 	let filename = 'items.txt';
 	await readFile(filename, 'utf8', async function (err, data) {
 		if (err) throw err;
 		await startTracking(await data.split('\r\n'));
+		console.log('done!');
 	});
 }
 async function setup(itemName) {
@@ -65,7 +68,7 @@ async function startTracking(itemNames) {
 				const row = await db.get('SELECT * FROM products WHERE name = :name', {
 					':name': productName,
 				});
-				console.log(productName + ' Price: ' + price);
+				//console.log(productName + ' Price: ' + price);
 				price = price.replace(/€/, '');
 				price = price.replace(/,/, '.');
 				price = price.trim();
@@ -116,4 +119,10 @@ async function startTracking(itemNames) {
 	});
 	await Promise.all(procedItemNames);
 }
-loadItemNamesforSearch();
+async function main() {
+	loadItemNamesforSearch();
+	cron.schedule('* * * * *', () => {
+		loadItemNamesforSearch();
+	});
+}
+main();
