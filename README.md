@@ -1,5 +1,10 @@
 # Worten Monitor
 
+### Environment Variables
+
+All variables must be set in a .env file.
+Environment file example is included where you can set your target website and your discord webhook.
+
 ### Setup Worten Monitor
 
 `npm install`
