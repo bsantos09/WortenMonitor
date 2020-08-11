@@ -49,11 +49,13 @@ async function setup(itemName) {
 }
 
 async function startTracking(itemNames) {
+	// Loop goes over every single item on the list
 	let procedItemNames = await itemNames.map(async (itemName) => {
 		const driver = await setup(encodeURIComponent(itemName));
 
 		let products = await driver.findElements(By.className('w-product__url'));
 		let db = await openDb();
+		//Goes over every single product on page
 		let processedProducts = await products.map(async (product) => {
 			try {
 				let productName = await product
