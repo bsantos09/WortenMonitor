@@ -12,9 +12,9 @@ const IMAGE_URL =
 hook.setUsername('Worten Monitor');
 const chrome = require('selenium-webdriver/chrome');
 var cron = require('node-cron');
-
+// Sets avatar image for discord webhook
 hook.setAvatar(IMAGE_URL);
-
+//Loads items from file items.txt and sends them to be processed
 async function loadItemNamesforSearch() {
 	console.log('Checking!');
 	let filename = 'items.txt';
@@ -24,6 +24,7 @@ async function loadItemNamesforSearch() {
 		console.log('done!');
 	});
 }
+//Creates the browser instance at TARGET_WEBSITE
 async function setup(itemName) {
 	let driver = await new Builder()
 		.forBrowser('chrome')
