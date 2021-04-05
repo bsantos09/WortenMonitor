@@ -14,3 +14,5 @@ To be able to select the products you want to monitor make sure to edit the **it
 ### Run Worten Monitor
 
 `node index.js`
+ ### TODO
+ 
