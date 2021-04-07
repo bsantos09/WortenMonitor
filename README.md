@@ -15,4 +15,5 @@ To be able to select the products you want to monitor make sure to edit the **it
 
 `node index.js`
  ### TODO
+ Change to puppeteer
  
